@@ -1,5 +1,4 @@
 import requests
-import ffmpeg
 import execjs
 import subprocess
 from loguru import logger
@@ -13,7 +12,7 @@ class BilibiliSpider:
     headers: dict = {
         'Connection': 'close',
         'Origin': 'https://www.bilibili.com',
-        'Cookie': 'FEED_LIVE_VERSION=V8; browser_resolution=1920-961',
+        'Cookie': "buvid3=822E2C15-49B3-1C49-9476-882861297A7353598infoc; b_nut=1689151953; i-wanna-go-back=-1; _uuid=AF62FFE6-BC66-D661-7272-2E737A10A9CCF55290infoc; FEED_LIVE_VERSION=V8; header_theme_version=CLOSE; home_feed_column=5; buvid4=65ABB004-A3A5-9338-2C5D-C1C0BBE827BC02525-023070310-5XDEyMmqGJZ2Goa4%2Buy5ORAMxPKSas%2Fu; buvid_fp=88bc13d87440d348e368be232ade8863; CURRENT_FNVAL=4048; SESSDATA=38aa6af9%2C1704707686%2Cdd049%2A72VSSQqWZM7eqjwHMIJg_AUf01FwFJGE7vi7X5eefaEfN12lWD61SZGYpZxecg5FoYi2crRQAAXQA; bili_jct=7fa503ac811dab64643bfd7e629b4b72; DedeUserID=352118593; DedeUserID__ckMd5=caa5a0065a7ba677; rpdid=|(k|mmYl~|u)0J\"uY)mullYmR; sid=53tcmcnr; b_ut=5; bsource=search_baidu; bp_video_offset_352118593=817710847735365600; nostalgia_conf=-1; innersign=0; b_lsid=FBB7FE66_1894E416A23; browser_resolution=1920-961; PVID=5",
         'Referer': 'https://www.bilibili.com/video/BV1BW4y1f7HH/?spm_id_from=333.1007.tianma.5-2-16.click&vd_source=1a31b1526ae03de47f95a1a72bb61fa6',
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36'
     }
@@ -123,10 +122,10 @@ class BilibiliSpider:
                     'y_num': '4',
                     'fresh_type': '4',
                     'feed_version': 'V8',
-                    'fresh_idx_1h': '1',
-                    'fetch_row': '4',
-                    'fresh_idx': '1',
-                    'brush': '1',
+                    'fresh_idx_1h': '2',
+                    'fetch_row': '7',
+                    'fresh_idx': '2',
+                    'brush': '2',
                     'homepage_ver': '1',
                     'ps': '12',
                     'last_y_num': '5',
@@ -189,6 +188,8 @@ class BilibiliSpider:
 
                 # 提取 video 和 audio url
                 video_url = json_field['data']['dash']['video'][0]['baseUrl']
+                if 'logo=' in video_url:
+                    video_url = json_field['data']['dash']['video'][1]['baseUrl']
                 audio_url = json_field['data']['dash']['audio'][0]['baseUrl']
 
                 information_dict = dict(bvid=bvid, video_url=video_url, audio_url=audio_url)
@@ -217,7 +218,7 @@ class BilibiliSpider:
                 video = f'./video/{bvid}_video.m4s'
                 audio = f'./video/{bvid}_audio.m4s'
 
-                cmd = f'ffmpeg -i {video} -i {audio} -c copy -shortest ./video/{bvid}.mp4'
+                cmd = f'ffmpeg -r 30 -i {video} -i {audio} -c copy -shortest ./video/{bvid}.mp4 -n'
                 subprocess.run(cmd, shell=True)
             else:
                 # 删除 m4s 文件

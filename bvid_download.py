@@ -1,11 +1,12 @@
 import requests
 import ffmpeg
-from tqdm import tqdm
 from loguru import logger
 
 import re
 import json
 import os
+import argparse
+import textwrap
 
 
 class BilibiliBvidDownload:
@@ -49,7 +50,13 @@ class BilibiliBvidDownload:
         video = ffmpeg.input(video_path)
         audio = ffmpeg.input(audio_path)
         output = ffmpeg.output(video, audio, f'./video/{bvid}.mp4', r=60)
-        ffmpeg.run(output, capture_stdout=True, capture_stderr=True, overwrite_output=True)
+        ffmpeg.run(
+            output,
+            capture_stdout=True,
+            capture_stderr=True,
+            overwrite_output=True,
+            cmd=r'D:\ffmpeg\bin\ffmpeg.exe'
+        )
 
         # 删除m4s文件
         os.remove(video_path)
@@ -76,40 +83,31 @@ class BilibiliBvidDownload:
         # 保存音视频文件
         response = self.get_response(url)
         if response.status_code != 403:
-            total = int(response.headers.get('content-length', 0))
             file_name = f'./video/{bvid}_{types}.m4s'
-            with open(file_name, mode='wb') as f, tqdm(
-                total=total,
-                unit='iB',
-                unit_scale=True,
-                unit_divisor=1024
-            ) as bar:
-                for content_data in response.iter_content(chunk_size=1024):
-                    size = f.write(content_data)
-                    bar.update(size)
+            with open(file_name, mode='wb') as f:
+                f.write(response.content)
 
-    def get_response(self, url, params=None, stream=False):
+    def get_response(self, url, params=None):
         response = requests.get(
             url=url,
             headers=self.headers,
-            params=params,
-            stream=stream
+            params=params
         )
         if response.status_code in [200, 206]:
-            # logger.debug(
-            #     """
-            #         -------------- request information --------------
-            #         url = %s
-            #         status code = %s
-            #         args = {'headers': %s 'params': %s}
-            #     """
-            #     % (
-            #         url,
-            #         response.status_code,
-            #         self.headers,
-            #         params,
-            #     )
-            # )
+            logger.debug(
+                """
+                    -------------- request information --------------
+                    url = %s
+                    status code = %s
+                    args = {'headers': %s 'params': %s}
+                """
+                % (
+                    url,
+                    response.status_code,
+                    self.headers,
+                    params,
+                )
+            )
             return response
         else:
             logger.error(
@@ -170,6 +168,16 @@ class BilibiliBvidDownload:
 
 
 if __name__ == '__main__':
-    bvid_spider = BilibiliBvidDownload(['BV1J14y1o7x4', 'BV1nV4y187vG'])
+    # parser = argparse.ArgumentParser(
+    #     description="Bilibili video download",
+    #     formatter_class=argparse.RawDescriptionHelpFormatter,
+    #     epilog=textwrap.dedent(""" demo:
+    #                 python bvid_download.py -b "BV1J14y1o7x4" "BV16a4y1F7Nb"
+    #             """)
+    # )
+    # parser.add_argument('-b', '--bvid', nargs='+', type=str, help='视频bvid，可以指定多个')
+    # args = parser.parse_args()
+    # bvid = args.bvid
+    bvid_spider = BilibiliBvidDownload('BV1ZX4y1p72V')
     bvid_spider.parse_download_url()
 

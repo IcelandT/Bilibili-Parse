@@ -2,6 +2,8 @@ import sys
 import re
 import json
 import os
+import argparse
+import textwrap
 
 import asyncio
 import aiofiles
@@ -120,6 +122,8 @@ class BDown(object):
 
         async with ClientSession() as session:
             async with session.get(url, headers=self.headers) as response:
+                if not os.path.exists('.\\video'):
+                    os.mkdir('.\\video')
                 save_path = os.path.join('.\\video', file_name)
                 # 文件总大小
                 total_size = int(response.headers['Content-Length'])
@@ -172,24 +176,27 @@ class BDown(object):
         console = Console()
         console.print(':victory_hand_medium-light_skin_tone:'
                       ' 下载成功! '
-                      ':victory_hand_medium-light_skin_tone:')
+                      ':victory_hand_medium-light_skin_tone:', style='bold cyan')
         # 删除音视频文件
         os.remove(video_file)
         os.remove(audio_file)
 
     async def worker(self) -> None:
-        bvid = await self.task.get()
-        await self.crawl(bvid)
-        self.task.task_done()
+        if not self.task.empty():
+            bvid = await self.task.get()
+            await self.crawl(bvid)
+            self.task.task_done()
+        else:
+            pass
 
     async def start(self) -> None:
         await self.create_task()
-        workers = [
-            asyncio.create_task(self.worker())
-            for _ in range(int(self.works))
-            if not self.task.empty()
-        ]
-        await asyncio.gather(*workers)
+        while not self.task.empty():
+            workers = [
+                asyncio.create_task(self.worker())
+                for _ in range(int(self.works))
+            ]
+            await asyncio.gather(*workers)
 
 
 async def main(bvid, works) -> None:
@@ -198,4 +205,28 @@ async def main(bvid, works) -> None:
 
 
 if __name__ == '__main__':
-    asyncio.run(main('BV1gu4y127S7', 1))
+
+    parser = argparse.ArgumentParser(
+        description='Bilibili parse',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=textwrap.dedent(
+            r"""
+                    ____  ______    ________  ______    ____   ____  ___    ____  _____ ______
+                   / __ )/  _/ /   /  _/ __ )/  _/ /   /  _/  / __ \/   |  / __ \/ ___// ____/
+                  / __  |/ // /    / // __  |/ // /    / /   / /_/ / /| | / /_/ /\__ \/ __/   
+                 / /_/ // // /____/ // /_/ // // /____/ /   / ____/ ___ |/ _, _/___/ / /___   
+                /_____/___/_____/___/_____/___/_____/___/  /_/   /_/  |_/_/ |_|/____/_____/   
+                                                                                                                                                                                                                                                
+                如何使用？
+                方法: python async_b_down.py -b 视频的bvid号 -w 并发数量
+                例如: python async_b_down.py -b BV1UQ4y1d7os -w 1
+            """
+        ))
+    parser.add_argument('-b', '--bvid', type=str, required=True, help='bvid号')
+    parser.add_argument('-w', '--works', type=int, required=True, help='并发数量')
+    try:
+        args = parser.parse_args()
+        asyncio.run(main(args.bvid, args.works))
+    except:
+        console = Console()
+        console.print(':light_bulb: 未填写对应的参数 :light_bulb:', style='bold yellow')

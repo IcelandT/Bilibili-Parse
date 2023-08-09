@@ -203,7 +203,7 @@ if __name__ == '__main__':
                 /_____/___/_____/___/_____/___/_____/___/  /_/   /_/  |_/_/ |_|/____/_____/   
 
                 如何使用？
-                方法: python ABParse.py -b 视频的bvid号
+                方法: python ABParse.py -b 视频vid号
                 例如: python ABParse.py -b BV1UQ4y1d7os
             """
         ))

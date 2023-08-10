@@ -13,7 +13,6 @@ from rich.table import Table
 from aiohttp import ClientSession
 from moviepy.editor import VideoFileClip, AudioFileClip
 
-
 console = Console()
 
 
@@ -69,7 +68,7 @@ class Requests(object):
                 return await self.get(session=session)
 
 
-class BDown(object):
+class AsyncBParse(object):
     headers = {
         'Referer': 'https://www.bilibili.com/',
         'Cookie': 'SESSDATA=6fa654bd%2C1705137814%2C77ce0%2A721XIprtlSi35wkAFvu9Hr7ZTZ0Y_q2QTtYva2zkwkCOpSLv10zMuVL_S8l2HZNXlpU2-XEwAAXQA',
@@ -81,21 +80,25 @@ class BDown(object):
         self.video_dir = '.\\video'
 
     @staticmethod
-    def parse_audio_frequency(response) -> tuple[str, str, str]:
+    async def parse_audio_frequency(response) -> tuple[str, str, str]:
         """
         解析视频中的信息，如 video url、播放量等
         :param response:
         :return:
         """
         match_script_code = '<script>window.__playinfo__=(.*?)</script>'
-        match_video_title = '<title data-vue-meta="true">(.*?)</title>'
+        match_video_title = '"title":"(.*?)",'
         match_play_volume = '视频播放量 (.*?)、'
         match_barrage_quantity = '弹幕量 (.*?)、'
+        match_like_count = '点赞数 (.*?)、'
+        match_coins_nums = '投硬币枚数 (.*?)、'
 
         script_code_list = findall(match_script_code, response)
-        video_title_list = findall(match_video_title, response)
         play_volume_list = findall(match_play_volume, response)
         barrage_quantity_list = findall(match_barrage_quantity, response)
+        video_title_list = findall(match_video_title, response)
+        like_count_list = findall(match_like_count, response)
+        coins_nums = findall(match_coins_nums, response)
         if script_code_list and video_title_list:
             json_script_code = loads(script_code_list[0])
             dash = json_script_code.get('data').get('dash')
@@ -104,22 +107,33 @@ class BDown(object):
                 audio_url = dash.get('audio')[0].get('baseUrl')
                 video_title = video_title_list[0]
                 if video_url and audio_url:
-                    if play_volume_list or barrage_quantity_list:
-                        # 视频基本信息
-                        table = Table(show_header=True, header_style='bold yellow')
-                        table.add_column('播放量')
-                        table.add_column('弹幕量')
-                        table.add_column('标题')
-                        table.add_row(
-                            play_volume_list[0],
-                            barrage_quantity_list[0],
-                            video_title
-                        )
-                        console.print(table)
+                    # 视频基本信息
+                    table = Table(show_header=True, header_style='bold magenta')
+                    table.add_column('播放量', justify='right',)
+                    table.add_column('弹幕量', justify='right',)
+                    table.add_column('点赞数', justify='right',)
+                    table.add_column('硬币数', justify='right',)
+                    table.add_column('标题')
+                    table.add_row(
+                        play_volume_list[0],
+                        barrage_quantity_list[0],
+                        like_count_list[0],
+                        coins_nums[0],
+                        video_title
+                    )
+                    console.print(table)
                     return video_url, audio_url, video_title
                 else:
                     console.print('提取时出现错误', style='bold red')
                     exit(1)
+
+    @staticmethod
+    async def download_chunk(session, url, start_chunk, end_chunk, progress_bar) -> bytes:
+        headers = {'Range': f'bytes={start_chunk}-{end_chunk}'}
+        async with session.get(url=url, headers=headers) as response:
+            chunk = await response.read()
+            progress_bar.update(len(chunk))
+            return chunk
 
     async def download(self, url, url_type, video_title) -> None:
         if url_type == 'video':
@@ -128,7 +142,7 @@ class BDown(object):
             file_name = video_title + '_audio.m4s'
 
         async with ClientSession() as session:
-            async with session.get(url, headers=self.headers) as response:
+            async with session.get(url) as response:
                 if not os.path.exists(self.video_dir):
                     os.mkdir(self.video_dir)
                 save_path = os.path.join(self.video_dir, file_name)
@@ -140,16 +154,27 @@ class BDown(object):
                     unit='B',
                     unit_scale=True,
                     dynamic_ncols=True,
-                    ncols=30
+                    ncols=20
                 )
                 progress_bar.set_description(url_type)
+                # 分段下载
+                tasks = list()
+                num_chunks = 20
+                chunk_size = total_size // num_chunks
+                for i in range(num_chunks):
+                    start_byte = i * chunk_size
+                    # 计算最后一段的结束位置
+                    end_byte = start_byte + chunk_size - 1 if i < num_chunks - 1 else total_size - 1
+                    task = asyncio.create_task(
+                        self.download_chunk(session, url, start_byte, end_byte, progress_bar)
+                    )
+                    tasks.append(task)
+                all_chunk = await asyncio.gather(*tasks)
+
                 async with aiofiles.open(save_path, mode='wb') as f:
-                    async for chunk in response.content.iter_chunked(1024):
-                        if not chunk:
-                            break
+                    for chunk in all_chunk:
                         await f.write(chunk)
-                        progress_bar.update(len(chunk))
-                    progress_bar.close()
+                progress_bar.close()
 
     async def parser(self, bvid) -> None:
         url = 'https://www.bilibili.com/video/' + bvid + '/'
@@ -163,35 +188,34 @@ class BDown(object):
             params=params,
             headers=self.headers
         )
-
         # 提取 video、audio 文件
-        video_url, audio_url, video_title = self.parse_audio_frequency(response)
+        video_url, audio_url, video_title = await self.parse_audio_frequency(response)
 
-        # 分别传入下载器
+        # 将 video、audio url 分别传入下载器
         await self.download(video_url, 'video', video_title)
         await self.download(audio_url, 'audio', video_title)
 
         # 合并音视频
-        video_file = os.path.join(self.video_dir, video_title + '_video.m4s')
-        audio_file = os.path.join(self.video_dir, video_title + '_audio.m4s')
-        video = VideoFileClip(video_file)
-        audio = AudioFileClip(audio_file)
-        video = video.set_audio(audio)
-        # 输出合并后的文件
-        out_file = os.path.join(self.video_dir, video_title + '.mp4')
-        video.write_videofile(
-            out_file,
-            codec='libx264',
-            audio_codec='aac',
-            fps=30.303,
-            preset='fast'
-        )
-        console.print(':victory_hand_medium-light_skin_tone:'
-                      ' 下载成功! '
-                      ':victory_hand_medium-light_skin_tone:', style='bold cyan')
-        # 删除音视频文件
-        os.remove(video_file)
-        os.remove(audio_file)
+        # video_file = os.path.join(self.video_dir, video_title + '_video.m4s')
+        # audio_file = os.path.join(self.video_dir, video_title + '_audio.m4s')
+        # video = VideoFileClip(video_file)
+        # audio = AudioFileClip(audio_file)
+        # video = video.set_audio(audio)
+        # # 输出合并后的文件
+        # out_file = os.path.join(self.video_dir, video_title + '.mp4')
+        # video.write_videofile(
+        #     out_file,
+        #     codec='libx264',
+        #     audio_codec='aac',
+        #     fps=30.303,
+        #     preset='ultrafast'
+        # )
+        # console.print(':victory_hand_medium-light_skin_tone:'
+        #               ' 下载成功! '
+        #               ':victory_hand_medium-light_skin_tone:', style='bold cyan')
+        # # 删除音视频文件
+        # os.remove(video_file)
+        # os.remove(audio_file)
 
     async def start(self) -> None:
         self.vid = self.vid.replace(' ', '')
@@ -207,11 +231,6 @@ class BDown(object):
                 ':warning-emoji: 当前仅允许传入一个vid!\n'
                 ':warning-emoji: 输入 python Async_BParse.py -h 获取帮助'
             )
-
-
-async def main(vid) -> None:
-    spider = BDown(vid)
-    await spider.start()
 
 
 if __name__ == '__main__':
@@ -235,7 +254,8 @@ if __name__ == '__main__':
     args = parser.parse_args()
     vid = args.vid
     if vid:
-        asyncio.run(main(vid))
+        Async_BParse = AsyncBParse(vid)
+        asyncio.run(Async_BParse.start())
     else:
         console.print(
             ':warning-emoji:[bold red] 未填写对应的参数!\n'

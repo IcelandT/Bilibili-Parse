@@ -170,14 +170,13 @@ class AsyncBParse(object):
                     )
                     tasks.append(task)
                 all_chunk = await asyncio.gather(*tasks)
-
                 async with aiofiles.open(save_path, mode='wb') as f:
                     for chunk in all_chunk:
                         await f.write(chunk)
                 progress_bar.close()
 
-    async def parser(self, bvid) -> None:
-        url = 'https://www.bilibili.com/video/' + bvid + '/'
+    async def parser(self, vid) -> None:
+        url = 'https://www.bilibili.com/video/' + vid + '/'
         params = {
             'spm_id_from': '333.1007.tianma.2-3-6.click',
             'vd_source': '1a31b1526ae03de47f95a1a72bb61fa6'
@@ -196,26 +195,26 @@ class AsyncBParse(object):
         await self.download(audio_url, 'audio', video_title)
 
         # 合并音视频
-        # video_file = os.path.join(self.video_dir, video_title + '_video.m4s')
-        # audio_file = os.path.join(self.video_dir, video_title + '_audio.m4s')
-        # video = VideoFileClip(video_file)
-        # audio = AudioFileClip(audio_file)
-        # video = video.set_audio(audio)
-        # # 输出合并后的文件
-        # out_file = os.path.join(self.video_dir, video_title + '.mp4')
-        # video.write_videofile(
-        #     out_file,
-        #     codec='libx264',
-        #     audio_codec='aac',
-        #     fps=30.303,
-        #     preset='ultrafast'
-        # )
-        # console.print(':victory_hand_medium-light_skin_tone:'
-        #               ' 下载成功! '
-        #               ':victory_hand_medium-light_skin_tone:', style='bold cyan')
-        # # 删除音视频文件
-        # os.remove(video_file)
-        # os.remove(audio_file)
+        video_file = os.path.join(self.video_dir, video_title + '_video.m4s')
+        audio_file = os.path.join(self.video_dir, video_title + '_audio.m4s')
+        video = VideoFileClip(video_file)
+        audio = AudioFileClip(audio_file)
+        video = video.set_audio(audio)
+        # 输出合并后的文件
+        out_file = os.path.join(self.video_dir, video_title + '.mp4')
+        video.write_videofile(
+            out_file,
+            codec='libx264',
+            audio_codec='aac',
+            fps=30.303,
+            preset='ultrafast'
+        )
+        console.print(':victory_hand_medium-light_skin_tone:'
+                      ' 下载成功! '
+                      ':victory_hand_medium-light_skin_tone:', style='bold cyan')
+        # 删除音视频文件
+        os.remove(video_file)
+        os.remove(audio_file)
 
     async def start(self) -> None:
         self.vid = self.vid.replace(' ', '')

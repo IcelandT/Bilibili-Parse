@@ -102,30 +102,31 @@ class AsyncBParse(object):
         if script_code_list and video_title_list:
             json_script_code = loads(script_code_list[0])
             dash = json_script_code.get('data').get('dash')
-            if dash:
-                video_url = dash.get('video')[0].get('baseUrl')
-                audio_url = dash.get('audio')[0].get('baseUrl')
-                video_title = video_title_list[0]
-                if video_url and audio_url:
-                    # 视频基本信息
-                    table = Table(show_header=True, header_style='bold magenta')
-                    table.add_column('播放量', justify='right',)
-                    table.add_column('弹幕量', justify='right',)
-                    table.add_column('点赞数', justify='right',)
-                    table.add_column('硬币数', justify='right',)
-                    table.add_column('标题')
-                    table.add_row(
-                        play_volume_list[0],
-                        barrage_quantity_list[0],
-                        like_count_list[0],
-                        coins_nums[0],
-                        video_title
-                    )
-                    console.print(table)
-                    return video_url, audio_url, video_title
-                else:
-                    console.print('提取时出现错误', style='bold red')
-                    exit(1)
+            for video_data in dash.get('video'):
+                if video_data['codecid'] == 12:
+                    video_url = video_data.get('baseUrl')
+                    audio_url = dash.get('audio')[0].get('baseUrl')
+                    video_title = video_title_list[0]
+                    if video_url and audio_url:
+                        # 视频基本信息
+                        table = Table(show_header=True, header_style='bold magenta')
+                        table.add_column('播放量', justify='right',)
+                        table.add_column('弹幕量', justify='right',)
+                        table.add_column('点赞数', justify='right',)
+                        table.add_column('硬币数', justify='right',)
+                        table.add_column('标题')
+                        table.add_row(
+                            play_volume_list[0],
+                            barrage_quantity_list[0],
+                            like_count_list[0],
+                            coins_nums[0],
+                            video_title
+                        )
+                        console.print(table)
+                        return video_url, audio_url, video_title
+                    else:
+                        console.print('提取时出现错误', style='bold red')
+                        exit(1)
 
     @staticmethod
     async def download_chunk(session, url, start_chunk, end_chunk, progress_bar) -> bytes:
@@ -245,8 +246,8 @@ if __name__ == '__main__':
                 /_____/___/_____/___/_____/___/_____/___/  /_/   /_/  |_/_/ |_|/____/_____/   
 
                 如何使用？
-                方法: python ABParse.py -b 视频vid号
-                例如: python ABParse.py -b BV1UQ4y1d7os
+                方法: python ABParse.py -v 视频vid号
+                例如: python ABParse.py -v BV1UQ4y1d7os
             """
         ))
     parser.add_argument('-v', '--vid', type=str, help='vid号')
